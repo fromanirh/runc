@@ -260,6 +260,7 @@ type runner struct {
 	notifySocket    *notifySocket
 	criuOpts        *libcontainer.CriuOpts
 	logLevel        string
+	forceAffinity   bool
 }
 
 func (r *runner) run(config *specs.Process) (int, error) {
@@ -275,6 +276,9 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	process, err := newProcess(*config, r.init, r.logLevel)
 	if err != nil {
 		return -1, err
+	}
+	if r.forceAffinity {
+		process.Env = append(process.Env, "_FORCE_AFFINITY")
 	}
 	if len(r.listenFDs) > 0 {
 		process.Env = append(process.Env, "LISTEN_FDS="+strconv.Itoa(len(r.listenFDs)), "LISTEN_PID=1")

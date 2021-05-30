@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -161,6 +163,10 @@ func (p *setnsProcess) start() (retErr error) {
 			}
 		}
 	}
+	if err := setAffinity(p.config, p.pid()); err != nil {
+		return newSystemErrorWithCausef(err, "setting pid %d affinity", p.pid())
+	}
+
 	// set rlimits, this has to be done here because we lose permissions
 	// to raise the limits once we enter a user-namespace
 	if err := setupRlimits(p.config.Rlimits, p.pid()); err != nil {
@@ -389,6 +395,10 @@ func (p *initProcess) start() (retErr error) {
 			return newSystemErrorWithCause(err, "applying Intel RDT configuration for process")
 		}
 	}
+	if err := setAffinity(p.config, p.pid()); err != nil {
+		return newSystemErrorWithCausef(err, "setting pid %d affinity", p.pid())
+	}
+
 	if _, err := io.Copy(p.messageSockPair.parent, p.bootstrapData); err != nil {
 		return newSystemErrorWithCause(err, "copying bootstrap data to pipe")
 	}
@@ -723,4 +733,72 @@ func initWaiter(r io.Reader) chan error {
 	}()
 
 	return ch
+}
+
+func setAffinity(config *initConfig, pid int) error {
+	if config == nil ||
+		config.Env == nil ||
+		config.Config == nil ||
+		config.Config.Cgroups == nil {
+		// nothing to do
+		return nil
+	}
+	if !requiresAffinity(config.Env) {
+		// disabled
+		return nil
+	}
+	cpuIDs, err := parseLinuxCpuset(config.Config.Cgroups.Resources.CpusetCpus)
+	if err != nil {
+		return err
+	}
+	var cpuset unix.CPUSet
+	cpuset.Zero()
+	cpuset.Set(cpuIDs[0])
+	return unix.SchedSetaffinity(pid, &cpuset)
+}
+
+func parseLinuxCpuset(s string) ([]int, error) {
+	cpus := []int{}
+	if len(s) == 0 {
+		return cpus, nil
+	}
+
+	for _, item := range strings.Split(s, ",") {
+		item = strings.TrimSpace(item)
+		if !strings.Contains(item, "-") {
+			// single cpu: "2"
+			cpuid, err := strconv.Atoi(item)
+			if err != nil {
+				return cpus, err
+			}
+			cpus = append(cpus, cpuid)
+			continue
+		}
+
+		// range of cpus: "0-3"
+		cpuRange := strings.SplitN(item, "-", 2)
+		cpuBegin, err := strconv.Atoi(cpuRange[0])
+		if err != nil {
+			return cpus, err
+		}
+		cpuEnd, err := strconv.Atoi(cpuRange[1])
+		if err != nil {
+			return cpus, err
+		}
+		for cpuid := cpuBegin; cpuid <= cpuEnd; cpuid++ {
+			cpus = append(cpus, cpuid)
+		}
+	}
+
+	sort.Ints(cpus)
+	return cpus, nil
+}
+
+func requiresAffinity(env []string) bool {
+	for _, envVar := range env {
+		if envVar == "_FORCE_AFFINITY" {
+			return true
+		}
+	}
+	return false
 }

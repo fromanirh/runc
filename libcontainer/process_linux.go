@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/opencontainers/runc/libcontainer/affinity"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/fs2"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -161,6 +162,10 @@ func (p *setnsProcess) start() (retErr error) {
 			}
 		}
 	}
+	if _, err := setAffinity(p.config, p.pid()); err != nil {
+		return newSystemErrorWithCausef(err, "setting pid %d affinity", p.pid())
+	}
+
 	// set rlimits, this has to be done here because we lose permissions
 	// to raise the limits once we enter a user-namespace
 	if err := setupRlimits(p.config.Rlimits, p.pid()); err != nil {
@@ -389,6 +394,10 @@ func (p *initProcess) start() (retErr error) {
 			return newSystemErrorWithCause(err, "applying Intel RDT configuration for process")
 		}
 	}
+	if _, err := setAffinity(p.config, p.pid()); err != nil {
+		return newSystemErrorWithCausef(err, "setting pid %d affinity", p.pid())
+	}
+
 	if _, err := io.Copy(p.messageSockPair.parent, p.bootstrapData); err != nil {
 		return newSystemErrorWithCause(err, "copying bootstrap data to pipe")
 	}
@@ -723,4 +732,20 @@ func initWaiter(r io.Reader) chan error {
 	}()
 
 	return ch
+}
+
+func setAffinity(config *initConfig, pid int) (int, error) {
+	cpuID, err := affinity.GetAffinity(*config.Config, config.Env)
+	if err != nil {
+		return -1, err
+	}
+	if cpuID == -1 {
+		logrus.Debugf("pid %d: setting affinity to none")
+		return -1, nil
+	}
+	var cpuset unix.CPUSet
+	cpuset.Zero()
+	cpuset.Set(cpuID)
+	logrus.Debugf("pid %d: setting affinity to cpu %d", cpuID)
+	return cpuID, unix.SchedSetaffinity(pid, &cpuset)
 }

@@ -206,6 +206,10 @@ type Config struct {
 	// RootlessCgroups is set when unlikely to have the full access to cgroups.
 	// When RootlessCgroups is set, cgroups errors are ignored.
 	RootlessCgroups bool `json:"rootless_cgroups,omitempty"`
+
+	// ForceAffinity is set when the process run inside the container should be
+	// automatically pinned to the first cpu in the cpuset.
+	ForceAffinity bool `json:"force_affinity,omitempty"`
 }
 
 type HookName string

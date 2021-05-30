@@ -93,6 +93,10 @@ following will output a list of processes running in the container:
 			Name:  "preserve-fds",
 			Usage: "Pass N additional file descriptors to the container (stdio + $LISTEN_FDS + N in total)",
 		},
+		cli.BoolFlag{
+			Name:  "force-affinity",
+			Usage: "force process affinity to the first cpu in the cpuset",
+		},
 	},
 	Action: func(context *cli.Context) error {
 		if err := checkArgs(context, 1, minArgs); err != nil {
@@ -136,7 +140,6 @@ func execProcess(context *cli.Context) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-
 	logLevel := "info"
 	if context.GlobalBool("debug") {
 		logLevel = "debug"
@@ -153,6 +156,7 @@ func execProcess(context *cli.Context) (int, error) {
 		init:            false,
 		preserveFDs:     context.Int("preserve-fds"),
 		logLevel:        logLevel,
+		forceAffinity:   context.Bool("force-affinity"),
 	}
 	return r.run(p)
 }

@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/affinity"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/specconv"
@@ -234,6 +235,7 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec) (libcont
 		Spec:             spec,
 		RootlessEUID:     os.Geteuid() != 0,
 		RootlessCgroups:  rootlessCg,
+		ForceAffinity:    context.Bool("force-affinity"),
 	})
 	if err != nil {
 		return nil, err
@@ -260,6 +262,7 @@ type runner struct {
 	notifySocket    *notifySocket
 	criuOpts        *libcontainer.CriuOpts
 	logLevel        string
+	forceAffinity   bool
 }
 
 func (r *runner) run(config *specs.Process) (int, error) {
@@ -275,6 +278,14 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	process, err := newProcess(*config, r.init, r.logLevel)
 	if err != nil {
 		return -1, err
+	}
+	if r.forceAffinity {
+		cpuID, err := affinity.GetAffinity(r.container.Config(), nil)
+		if err != nil {
+			// this means the cpuset is malformed
+			return -1, err
+		}
+		process.Env = append(process.Env, affinity.SetAffinityToEnvVar(cpuID))
 	}
 	if len(r.listenFDs) > 0 {
 		process.Env = append(process.Env, "LISTEN_FDS="+strconv.Itoa(len(r.listenFDs)), "LISTEN_PID=1")

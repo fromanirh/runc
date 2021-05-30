@@ -200,6 +200,7 @@ type CreateOpts struct {
 	Spec             *specs.Spec
 	RootlessEUID     bool
 	RootlessCgroups  bool
+	ForceAffinity    bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -235,6 +236,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		NoNewKeyring:    opts.NoNewKeyring,
 		RootlessEUID:    opts.RootlessEUID,
 		RootlessCgroups: opts.RootlessCgroups,
+		ForceAffinity:   opts.ForceAffinity,
 	}
 
 	for _, m := range spec.Mounts {

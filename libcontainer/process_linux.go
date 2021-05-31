@@ -796,7 +796,7 @@ func parseLinuxCpuset(s string) ([]int, error) {
 
 func requiresAffinity(env []string) bool {
 	for _, envVar := range env {
-		if envVar == "_FORCE_AFFINITY" {
+		if strings.HasPrefix(envVar, "_FORCE_AFFINITY") {
 			return true
 		}
 	}

@@ -278,7 +278,7 @@ func (r *runner) run(config *specs.Process) (int, error) {
 		return -1, err
 	}
 	if r.forceAffinity {
-		process.Env = append(process.Env, "_FORCE_AFFINITY")
+		process.Env = append(process.Env, "_FORCE_AFFINITY=true")
 	}
 	if len(r.listenFDs) > 0 {
 		process.Env = append(process.Env, "LISTEN_FDS="+strconv.Itoa(len(r.listenFDs)), "LISTEN_PID=1")
